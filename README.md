@@ -50,6 +50,35 @@ The test suite verifies:
 - Game mechanics respond to player input
 - Notes array is properly maintained
 
+### Browser Compatibility
+
+The test suite works in all modern browsers that support:
+- ES6 JavaScript features
+- Web Audio API
+- HTML5 Canvas
+
+Tested and working in:
+- Chrome/Edge (latest)
+- Firefox (latest)
+- Safari (latest)
+
+### Troubleshooting
+
+**Tests show "ERROR: Could not load game"**
+- Make sure you are running a local web server (tests cannot run from `file://` URLs due to CORS restrictions)
+- Verify the `jimmie-jams` file exists in the same directory as `test.html`
+- Check the browser console for additional error messages
+
+**Tests fail unexpectedly**
+- Refresh the page to re-run the tests
+- Clear your browser cache if you recently modified the game code
+- Check that no browser extensions are interfering with the page
+
+**Web server command not found**
+- For Python: Make sure Python is installed and in your PATH
+- For Node.js: Install http-server globally with `npm install -g http-server`
+- Alternatively, use any other static file server you prefer
+
 ### Manual Testing
 
 You can also test the game manually by:
