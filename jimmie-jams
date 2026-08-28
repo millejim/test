@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Jimmie Jams</title>
+<style>
+  :root {
+    --lane-w: 150px;
+    --bg: #0b0b12;
+  }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: radial-gradient(circle at 50% 20%, #1a1a2e 0%, #0b0b12 70%);
+    color: #eee;
+    font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  #wrap {
+    position: relative;
+    width: 600px;
+    max-width: 96vw;
+  }
+  h1.title {
+    text-align: center;
+    font-size: 2.6em;
+    margin: 0 0 6px;
+    letter-spacing: 2px;
+    background: linear-gradient(90deg, #ff4d4d, #ffd93d, #4da6ff, #3ddc61);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow: 0 0 24px rgba(255,255,255,0.15);
+  }
+  #hud {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    font-size: 0.95em;
+  }
+  #meterBox {
+    flex: 1;
+    margin: 0 16px;
+    height: 14px;
+    background: #222;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #444;
+  }
+  #meterFill {
+    height: 100%;
+    width: 50%;
+    background: linear-gradient(90deg, #ff4d4d, #ffd93d, #3ddc61);
+    transition: width 0.15s ease;
+  }
+  #combo {
+    min-width: 90px;
+    text-align: right;
+    color: #ffd93d;
+    font-weight: bold;
+  }
+  #score {
+    min-width: 90px;
+    font-weight: bold;
+  }
+  canvas {
+    display: block;
+    background: #10101a;
+    border: 2px solid #333;
+    border-radius: 10px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.6);
+  }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(5,5,10,0.88);
+    border-radius: 10px;
+    text-align: center;
+    gap: 14px;
+    padding: 20px;
+  }
+  .overlay h2 {
+    font-size: 1.8em;
+    margin: 0;
+  }
+  .overlay p {
+    margin: 2px 0;
+    color: #bbb;
+  }
+  .keycap {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: #222;
+    border: 1px solid #555;
+    margin: 0 3px;
+    font-weight: bold;
+  }
+  .startBtn {
+    margin-top: 10px;
+    padding: 10px 26px;
+    font-size: 1.1em;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    background: linear-gradient(90deg, #ff4d4d, #ffd93d);
+    color: #111;
+    font-weight: bold;
+  }
+  .startBtn:hover { filter: brightness(1.1); }
+  .hidden { display: none !important; }
+  .finalScore {
+    font-size: 1.4em;
+    color: #ffd93d;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1 class="title">Jimmie Jams</h1>
+  <div id="hud">
+    <div id="score">Score: 0</div>
+    <div id="meterBox"><div id="meterFill"></div></div>
+    <div id="combo">Combo: 0</div>
+  </div>
+  <div style="position:relative;">
+    <canvas id="game" width="600" height="520"></canvas>
+
+    <div id="startOverlay" class="overlay">
+      <h2>Ready to jam?</h2>
+      <p>Hit the falling notes as they cross the line.</p>
+      <p>
+        <span class="keycap">D</span><span class="keycap">F</span><span class="keycap">J</span><span class="keycap">K</span>
+      </p>
+      <p>Miss too many and the crowd walks out.</p>
+      <button class="startBtn" id="startBtn">Start Jamming</button>
+    </div>
+
+    <div id="gameOverOverlay" class="overlay hidden">
+      <h2>You Got Booed Off Stage</h2>
+      <div class="finalScore" id="finalScore">Score: 0</div>
+      <p id="finalStats"></p>
+      <button class="startBtn" id="restartBtn">Play Again (R)</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const LANES = [
+    { key: 'D', color: '#3ddc61', freq: 220.0 },
+    { key: 'F', color: '#ff4d4d', freq: 261.6 },
+    { key: 'J', color: '#ffd93d', freq: 329.6 },
+    { key: 'K', color: '#4da6ff', freq: 392.0 },
+  ];
+  const LANE_COUNT = LANES.length;
+  const LANE_W = W / LANE_COUNT;
+  const HIT_Y = H - 90;
+  const NOTE_R = 26;
+
+  const PERFECT_WINDOW = 16;
+  const GOOD_WINDOW = 38;
+  const MAX_JUDGE_WINDOW = 68;
+
+  const scoreEl = document.getElementById('score');
+  const comboEl = document.getElementById('combo');
+  const meterFillEl = document.getElementById('meterFill');
+  const startOverlay = document.getElementById('startOverlay');
+  const gameOverOverlay = document.getElementById('gameOverOverlay');
+  const finalScoreEl = document.getElementById('finalScore');
+  const finalStatsEl = document.getElementById('finalStats');
+
+  let audioCtx = null;
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function envGain(startTime, peak, attack, decay) {
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0, startTime);
+    g.gain.linearRampToValueAtTime(peak, startTime + attack);
+    g.gain.exponentialRampToValueAtTime(0.001, startTime + attack + decay);
+    return g;
+  }
+
+  function playKick() {
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(140, t);
+    osc.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    const g = envGain(t, 0.9, 0.002, 0.16);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.2);
+  }
+
+  function playHihat() {
+    const t = audioCtx.currentTime;
+    const bufferSize = audioCtx.sampleRate * 0.05;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buffer;
+    const hp = audioCtx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 6000;
+    const g = envGain(t, 0.18, 0.001, 0.04);
+    noise.connect(hp).connect(g).connect(audioCtx.destination);
+    noise.start(t);
+  }
+
+  function playNoteTone(freq, quality) {
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq, t);
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = quality === 'perfect' ? 4000 : 2200;
+    const peak = quality === 'perfect' ? 0.35 : 0.25;
+    const g = envGain(t, peak, 0.005, 0.18);
+    osc.connect(filter).connect(g).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.22);
+  }
+
+  function playMissBuzz() {
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(90, t);
+    const g = envGain(t, 0.15, 0.001, 0.12);
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.15);
+  }
+
+  const BPM = 100;
+  const BEAT_MS = 60000 / BPM;
+  const SUBDIV_MS = BEAT_MS / 2;
+
+  let state = 'start';
+  let notes = [];
+  let particles = [];
+  let popups = [];
+  let pressedLanes = new Set();
+
+  let score = 0;
+  let combo = 0;
+  let maxCombo = 0;
+  let hits = 0;
+  let misses = 0;
+  let meter = 50;
+
+  let startTime = 0;
+  let elapsedRun = 0;
+  let nextSubdivTime = 0;
+  let subdivCount = 0;
+  let lastLane = -1;
+  let fallSpeed = 0.16;
+
+  function resetGame() {
+    notes = [];
+    particles = [];
+    popups = [];
+    score = 0;
+    combo = 0;
+    maxCombo = 0;
+    hits = 0;
+    misses = 0;
+    meter = 50;
+    subdivCount = 0;
+    lastLane = -1;
+    fallSpeed = 0.16;
+    startTime = performance.now();
+    elapsedRun = 0;
+    nextSubdivTime = startTime;
+    updateHud();
+  }
+
+  function updateHud() {
+    scoreEl.textContent = 'Score: ' + score;
+    comboEl.textContent = 'Combo: ' + combo;
+    meterFillEl.style.width = Math.max(0, Math.min(100, meter)) + '%';
+  }
+
+  function spawnNote(laneIndex, now) {
+    notes.push({ lane: laneIndex, spawnTime: now, y: -NOTE_R, judged: false });
+  }
+
+  function multiplierFor(c) {
+    return 1 + Math.min(3, Math.floor(c / 10));
+  }
+
+  function judgeHit(laneIndex) {
+    let best = null;
+    let bestDist = Infinity;
+    for (const n of notes) {
+      if (n.judged || n.lane !== laneIndex) continue;
+      const dist = Math.abs(n.y - HIT_Y);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = n;
+      }
+    }
+    if (!best || bestDist > MAX_JUDGE_WINDOW) {
+      return;
+    }
+    best.judged = true;
+    let quality, points, meterDelta;
+    if (bestDist <= PERFECT_WINDOW) {
+      quality = 'PERFECT'; points = 100; meterDelta = 2;
+    } else if (bestDist <= GOOD_WINDOW) {
+      quality = 'GOOD'; points = 50; meterDelta = 1;
+    } else {
+      quality = 'OK'; points = 20; meterDelta = 0;
+    }
+    combo++;
+    maxCombo = Math.max(maxCombo, combo);
+    hits++;
+    const mult = multiplierFor(combo);
+    score += points * mult;
+    meter = Math.min(100, meter + meterDelta);
+    ensureAudio();
+    playNoteTone(LANES[laneIndex].freq, quality === 'PERFECT' ? 'perfect' : 'normal');
+    spawnPopup(laneIndex, quality, quality === 'PERFECT' ? '#3ddc61' : (quality === 'GOOD' ? '#ffd93d' : '#aaa'));
+    spawnParticles(laneIndex);
+    updateHud();
+  }
+
+  function registerMiss(laneIndex) {
+    combo = 0;
+    misses++;
+    meter -= 8;
+    ensureAudio();
+    playMissBuzz();
+    spawnPopup(laneIndex, 'MISS', '#ff4d4d');
+    updateHud();
+    if (meter <= 0) {
+      meter = 0;
+      updateHud();
+      endGame();
+    }
+  }
+
+  function spawnPopup(laneIndex, text, color) {
+    popups.push({
+      x: laneIndex * LANE_W + LANE_W / 2,
+      y: HIT_Y - 40,
+      text, color,
+      born: performance.now(),
+      life: 550
+    });
+  }
+
+  function spawnParticles(laneIndex) {
+    const cx = laneIndex * LANE_W + LANE_W / 2;
+    for (let i = 0; i < 10; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1 + Math.random() * 2.5;
+      particles.push({
+        x: cx, y: HIT_Y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        color: LANES[laneIndex].color,
+        born: performance.now(),
+        life: 400
+      });
+    }
+  }
+
+  function keyToLane(key) {
+    const idx = LANES.findIndex(l => l.key === key);
+    return idx;
+  }
+
+  window.addEventListener('keydown', (e) => {
+    const key = e.key.toUpperCase();
+    if (state === 'start' && (key === ' ' || e.code === 'Space' || key === 'ENTER')) {
+      startGame();
+      return;
+    }
+    if (state === 'gameover' && key === 'R') {
+      startGame();
+      return;
+    }
+    if (state !== 'playing') return;
+    const laneIndex = keyToLane(key);
+    if (laneIndex === -1) return;
+    if (e.repeat) return;
+    if (pressedLanes.has(laneIndex)) return;
+    pressedLanes.add(laneIndex);
+    judgeHit(laneIndex);
+  });
+
+  window.addEventListener('keyup', (e) => {
+    const laneIndex = keyToLane(e.key.toUpperCase());
+    if (laneIndex !== -1) pressedLanes.delete(laneIndex);
+  });
+
+  document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('restartBtn').addEventListener('click', startGame);
+
+  function startGame() {
+    ensureAudio();
+    resetGame();
+    state = 'playing';
+    startOverlay.classList.add('hidden');
+    gameOverOverlay.classList.add('hidden');
+  }
+
+  function endGame() {
+    state = 'gameover';
+    finalScoreEl.textContent = 'Score: ' + score;
+    finalStatsEl.textContent = `Hits: ${hits}  Misses: ${misses}  Max Combo: ${maxCombo}`;
+    gameOverOverlay.classList.remove('hidden');
+  }
+
+  function difficultyTick(now) {
+    elapsedRun = now - startTime;
+    const rampSteps = Math.floor(elapsedRun / 15000);
+    fallSpeed = Math.min(0.40, 0.16 + rampSteps * 0.03);
+  }
+
+  function spawnProbability() {
+    return Math.min(0.75, 0.38 + elapsedRun / 90000);
+  }
+
+  function update(now) {
+    if (state !== 'playing') return;
+    difficultyTick(now);
+
+    while (now >= nextSubdivTime) {
+      subdivCount++;
+      const beatPos = subdivCount % 8;
+      if (beatPos === 0 || beatPos === 4) playKick();
+      playHihat();
+
+      if (Math.random() < spawnProbability()) {
+        let lane = Math.floor(Math.random() * LANE_COUNT);
+        if (lane === lastLane && Math.random() < 0.5) {
+          lane = (lane + 1 + Math.floor(Math.random() * (LANE_COUNT - 1))) % LANE_COUNT;
+        }
+        lastLane = lane;
+        spawnNote(lane, nextSubdivTime);
+      }
+      nextSubdivTime += SUBDIV_MS;
+    }
+
+    for (const n of notes) {
+      if (n.judged) continue;
+      n.y = (now - n.spawnTime) * fallSpeed;
+      if (n.y - HIT_Y > MAX_JUDGE_WINDOW) {
+        n.judged = true;
+        n.autoMissed = true;
+        registerMiss(n.lane);
+      }
+    }
+    notes = notes.filter(n => n.y < H + NOTE_R && (!n.judged || (now - n.spawnTime) * fallSpeed < H + NOTE_R));
+    notes = notes.filter(n => !(n.judged && n.y > H));
+
+    particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.08; });
+    particles = particles.filter(p => now - p.born < p.life);
+    popups = popups.filter(p => now - p.born < p.life);
+  }
+
+  function drawLanes() {
+    for (let i = 0; i < LANE_COUNT; i++) {
+      const x = i * LANE_W;
+      ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.0)';
+      ctx.fillRect(x, 0, LANE_W, H);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, HIT_Y);
+    ctx.lineTo(W, HIT_Y);
+    ctx.stroke();
+
+    for (let i = 0; i < LANE_COUNT; i++) {
+      const cx = i * LANE_W + LANE_W / 2;
+      const active = pressedLanes.has(i);
+      ctx.beginPath();
+      ctx.arc(cx, HIT_Y, NOTE_R + (active ? 6 : 0), 0, Math.PI * 2);
+      ctx.fillStyle = active ? LANES[i].color : 'rgba(255,255,255,0.06)';
+      ctx.globalAlpha = active ? 0.9 : 1;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = LANES[i].color;
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(LANES[i].key, cx, HIT_Y + 5);
+    }
+  }
+
+  function drawNotes() {
+    for (const n of notes) {
+      const cx = n.lane * LANE_W + LANE_W / 2;
+      ctx.beginPath();
+      ctx.arc(cx, n.y, NOTE_R, 0, Math.PI * 2);
+      ctx.fillStyle = LANES[n.lane].color;
+      ctx.shadowColor = LANES[n.lane].color;
+      ctx.shadowBlur = 14;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.arc(cx, n.y, NOTE_R * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fill();
+    }
+  }
+
+  function drawParticles() {
+    const now = performance.now();
+    for (const p of particles) {
+      const t = (now - p.born) / p.life;
+      ctx.globalAlpha = Math.max(0, 1 - t);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawPopups() {
+    const now = performance.now();
+    for (const p of popups) {
+      const t = (now - p.born) / p.life;
+      ctx.globalAlpha = Math.max(0, 1 - t);
+      ctx.fillStyle = p.color;
+      ctx.font = 'bold 20px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(p.text, p.x, p.y - t * 30);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    drawLanes();
+    drawNotes();
+    drawParticles();
+    drawPopups();
+  }
+
+  function loop(now) {
+    update(now);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  updateHud();
+  requestAnimationFrame(loop);
+
+  window.__game = {
+    getState: () => state,
+    getScore: () => score,
+    getCombo: () => combo,
+    getMeter: () => meter,
+    getNotes: () => notes,
+    start: startGame,
+    hitLane: judgeHit,
+  };
+})();
+</script>
+</body>
+</html>
