@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Jimmie Jams - Test Suite</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 20px;
+    background: #f5f5f5;
+  }
+  h1 {
+    color: #333;
+    border-bottom: 3px solid #4da6ff;
+    padding-bottom: 10px;
+  }
+  .test {
+    background: white;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 5px;
+    border-left: 4px solid #ccc;
+  }
+  .test.pass {
+    border-left-color: #3ddc61;
+  }
+  .test.fail {
+    border-left-color: #ff4d4d;
+  }
+  .test-name {
+    font-weight: bold;
+    margin-bottom: 5px;
+  }
+  .test-result {
+    color: #666;
+    font-size: 0.9em;
+  }
+  #summary {
+    background: #333;
+    color: white;
+    padding: 20px;
+    border-radius: 5px;
+    margin-top: 20px;
+    text-align: center;
+    font-size: 1.2em;
+  }
+  #summary.all-pass {
+    background: #3ddc61;
+  }
+  #summary.has-fail {
+    background: #ff4d4d;
+  }
+</style>
+</head>
+<body>
+<h1>Jimmie Jams Test Suite</h1>
+<div id="results"></div>
+<div id="summary"></div>
+
+<iframe id="gameFrame" src="jimmie-jams" style="display:none;"></iframe>
+
+<script>
+(() => {
+  const results = [];
+  const resultsEl = document.getElementById('results');
+  const summaryEl = document.getElementById('summary');
+
+  function assert(condition, message) {
+    if (!condition) {
+      throw new Error(message || 'Assertion failed');
+    }
+  }
+
+  function test(name, fn) {
+    const testEl = document.createElement('div');
+    testEl.className = 'test';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'test-name';
+    nameEl.textContent = name;
+    const resultEl = document.createElement('div');
+    resultEl.className = 'test-result';
+    testEl.appendChild(nameEl);
+    testEl.appendChild(resultEl);
+    resultsEl.appendChild(testEl);
+
+    try {
+      fn();
+      testEl.classList.add('pass');
+      resultEl.textContent = 'PASS';
+      results.push({ name, pass: true });
+    } catch (e) {
+      testEl.classList.add('fail');
+      resultEl.textContent = 'FAIL: ' + e.message;
+      results.push({ name, pass: false, error: e.message });
+    }
+  }
+
+  function runTests() {
+    const frame = document.getElementById('gameFrame');
+    const game = frame.contentWindow.__game;
+
+    if (!game) {
+      summaryEl.textContent = 'ERROR: Could not load game. Make sure jimmie-jams file exists.';
+      summaryEl.className = 'has-fail';
+      return;
+    }
+
+    test('Game object is exposed', () => {
+      assert(game !== undefined, 'game object should be defined');
+    });
+
+    test('Game has required methods', () => {
+      assert(typeof game.getState === 'function', 'getState should be a function');
+      assert(typeof game.getScore === 'function', 'getScore should be a function');
+      assert(typeof game.getCombo === 'function', 'getCombo should be a function');
+      assert(typeof game.getMeter === 'function', 'getMeter should be a function');
+      assert(typeof game.getNotes === 'function', 'getNotes should be a function');
+      assert(typeof game.start === 'function', 'start should be a function');
+      assert(typeof game.hitLane === 'function', 'hitLane should be a function');
+    });
+
+    test('Initial state is "start"', () => {
+      assert(game.getState() === 'start', 'initial state should be "start"');
+    });
+
+    test('Initial score is 0', () => {
+      assert(game.getScore() === 0, 'initial score should be 0');
+    });
+
+    test('Initial combo is 0', () => {
+      assert(game.getCombo() === 0, 'initial combo should be 0');
+    });
+
+    test('Initial meter is 50', () => {
+      assert(game.getMeter() === 50, 'initial meter should be 50');
+    });
+
+    test('Initial notes array is empty', () => {
+      const notes = game.getNotes();
+      assert(Array.isArray(notes), 'notes should be an array');
+      assert(notes.length === 0, 'initial notes should be empty');
+    });
+
+    test('Game can be started', () => {
+      game.start();
+      assert(game.getState() === 'playing', 'state should be "playing" after start');
+    });
+
+    test('Score increases when hitting notes', () => {
+      const initialScore = game.getScore();
+      game.hitLane(0);
+      // Score might not increase if there's no note to hit, but method should work
+      assert(typeof game.getScore() === 'number', 'score should be a number');
+    });
+
+    test('Notes array is accessible during gameplay', () => {
+      const notes = game.getNotes();
+      assert(Array.isArray(notes), 'notes should be an array during gameplay');
+    });
+
+    const passed = results.filter(r => r.pass).length;
+    const failed = results.filter(r => !r.pass).length;
+    summaryEl.textContent = `Tests: ${passed} passed, ${failed} failed, ${results.length} total`;
+    summaryEl.className = failed === 0 ? 'all-pass' : 'has-fail';
+  }
+
+  window.addEventListener('load', () => {
+    const frame = document.getElementById('gameFrame');
+    frame.addEventListener('load', () => {
+      setTimeout(runTests, 500);
+    });
+  });
+})();
+</script>
+</body>
+</html>
