@@ -10,29 +10,69 @@ A rhythm game where you hit falling notes as they cross the line. Built with HTM
 4. Time your hits perfectly to build combos and keep the crowd meter up
 5. Miss too many notes and the crowd walks out!
 
+## Development
+
+### Setup
+
+Install dependencies:
+```bash
+npm install
+```
+
+### Running Locally
+
+Start a local development server:
+```bash
+npm run serve
+```
+
+Then open http://localhost:8080/jimmie-jams in your browser.
+
 ## Running the Test Suite
 
-The project includes a test suite to verify the game's core functionality.
+The project includes both browser-based and automated tests.
+
+### Automated Tests (Playwright)
+
+Run the full test suite:
+```bash
+npm test
+```
+
+Run tests with UI mode:
+```bash
+npm run test:ui
+```
+
+Run tests in headed mode (see the browser):
+```bash
+npm run test:headed
+```
+
+The automated tests use Playwright to:
+- Verify the test.html page runs all tests successfully
+- Check that the game loads correctly
+- Validate the game API is properly exposed
+- Test game initialization and state transitions
 
 ### Browser-Based Tests
 
-The easiest way to run tests is using a web browser:
+You can also run tests manually in a browser:
 
 1. **Start a local web server** in the project directory:
    ```bash
-   # Using Python 3
+   npm run serve
+   
+   # Or using Python 3
    python3 -m http.server 8000
    
    # Or using Python 2
    python -m SimpleHTTPServer 8000
-   
-   # Or using Node.js (if you have http-server installed)
-   npx http-server -p 8000
    ```
 
 2. **Open the test page** in your browser:
    ```
-   http://localhost:8000/test.html
+   http://localhost:8080/test.html
    ```
 
 3. The test results will display automatically, showing:
@@ -69,6 +109,14 @@ You can also test the game manually by:
    // Simulate hitting a lane
    __game.hitLane(0)  // Hit lane 0 (D key)
    ```
+
+## Continuous Integration
+
+The project uses GitHub Actions to automatically run tests on every push and pull request. The CI workflow:
+- Sets up Node.js and Playwright
+- Installs dependencies
+- Runs the full test suite
+- Uploads test results as artifacts
 
 ## Game Features
 

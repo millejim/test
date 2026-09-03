@@ -1,0 +1,18 @@
+{
+  "name": "jimmie-jams",
+  "version": "1.0.0",
+  "description": "A rhythm game where you hit falling notes as they cross the line",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "serve": "http-server -p 8080"
+  },
+  "keywords": ["game", "rhythm", "html5", "canvas"],
+  "author": "Jimmie",
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "http-server": "^14.1.1"
+  }
+}
