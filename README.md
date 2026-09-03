@@ -85,3 +85,5 @@ You can also test the game manually by:
 - Canvas-based rendering
 - Web Audio API for sound generation
 - Responsive timing system based on BPM (100 BPM with subdivisions)
+
+This is a test sentence added to the README.
